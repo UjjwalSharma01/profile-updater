@@ -23,6 +23,12 @@ if [ ! -f "$INSTALL_DIR/profile-changer.png" ]; then
     cp ../profile-changer.png "$INSTALL_DIR/"
 fi
 
+# Create the executable script
+cat > "$INSTALL_DIR/profileUpdater" << EOF
+#!/bin/bash
+node "$INSTALL_DIR/index.js" "\$@"
+EOF
+
 # Ensure executable permissions
 chmod +x "$INSTALL_DIR/profileUpdater"
 
