@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import * as fsPromise from "fs/promises";
-import * as fs from "fs";
 import { fileURLToPath } from "url";
 import path from "path";
 import os from "os";
@@ -148,89 +147,73 @@ function sendNotification(title, message) {
 }
 
 async function openBrowser(config) {
-  // First check if we need to start Chrome with debugging enabled
-  let browser;
+  // Get the user's default Chrome profile path
+  const homeDir = os.homedir();
+  const defaultProfilePath = path.join(homeDir, '.config/google-chrome');
+  let browser = null;
+  
   try {
-    // Try to run Chrome with remote debugging enabled
-    const { exec } = await import('child_process');
-    // Check if Chrome is already running with remote debugging
-    let chromeRunningWithDebugging = false;
-    try {
-      const response = await fetch('http://localhost:9222/json/version');
-      if (response.ok) {
-        chromeRunningWithDebugging = true;
-      }
-    } catch (e) {
-      // Chrome not running with debugging, we'll start it
-    }
+    // First check if browser executable exists
+    await fsPromise.access(config.browserUrl);
+    const { spawn } = await import('child_process');
     
-    if (!chromeRunningWithDebugging) {
-      console.log("Starting Chrome with remote debugging enabled...");
-      // Use the default user profile instead of a temporary profile
-      // This will include all your saved logins and cookies
-      exec(`${config.browserUrl} --remote-debugging-port=9222 about:blank &`);
-      // Increase wait time to ensure Chrome loads properly
-      console.log("Waiting for Chrome to start...");
-      await new Promise(resolve => setTimeout(resolve, 5000));
-    }
+    // Try to open URL in existing Chrome session
+    console.log("Trying to open URL in existing Chrome session");
+    spawn(config.browserUrl, [
+      `--user-data-dir=${defaultProfilePath}`,
+      '--profile-directory=Default',
+      URL
+    ]);
     
-    // Connect to the Chrome instance
-    browser = await puppeteer.connect({
-      browserURL: 'http://localhost:9222',
-      defaultViewport: null
-    });
-    console.log("Connected to Chrome instance");
-  } catch (err) {
-    console.log("Failed to connect to Chrome, launching new browser instance");
-    console.error(err);
-    // Fall back to launching a new browser instance
+    // Give the browser some time to open the URL
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Continue with puppeteer for automation
     browser = await puppeteer.launch({
       executablePath: config.browserUrl,
       headless: isProduction,
       args: [
         '--no-sandbox', 
         '--disable-setuid-sandbox',
-        '--remote-debugging-port=9222'
+        `--user-data-dir=${defaultProfilePath}`, // Use existing Chrome profile
+        '--profile-directory=Default'
       ],
     });
-  }
-
-  try {
-    const page = await browser.newPage();
+    
+    // Try to reuse existing pages before creating a new one
+    const pages = await browser.pages();
+    const page = pages.length > 0 ? pages[0] : await browser.newPage();
 
     await page.setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
 
+    // Instead of opening a new tab, connect to the already opened URL
     await page.goto(URL, {
       waitUntil: "networkidle0",
       timeout: 0,
     });
     
-    // Check if we're already logged in (look for attachCV element)
-    const isLoggedIn = await page.evaluate(() => {
-      return !!document.querySelector("#attachCV");
+    // Check if we're already logged in by looking for the login form
+    const loginFormExists = await page.evaluate(() => {
+      return !!document.querySelector("#usernameField") && !!document.querySelector("#passwordField");
     });
     
-    if (!isLoggedIn) {
-      console.log("Not logged in, attempting to log in with provided credentials");
+    if (loginFormExists) {
+      console.log("Login form detected, attempting to log in");
       await page.type("#usernameField", config.email);
       await page.type("#passwordField", config.password);
       const loginButton = await page.$(
         ".waves-effect.waves-light.btn-large.btn-block.btn-bold.blue-btn.textTransform"
       );
       
-      // Wait longer for navigation to complete after login
-      await Promise.all([
-        page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 60000 }), 
-        loginButton.click()
-      ]);
+      await Promise.all([page.waitForNavigation(), loginButton.click()]);
+      
+      await page.goto(URL, {
+        waitUntil: "networkidle0",
+        timeout: 0,
+      });
     } else {
-      console.log("Already logged in, skipping login step");
+      console.log("Already logged in, continuing with profile update");
     }
-    
-    await page.goto(URL, {
-      waitUntil: "networkidle0",
-      timeout: 0,
-    });
     
     //? updating resume
     const [fileChooser] = await Promise.all([
@@ -262,7 +245,14 @@ async function openBrowser(config) {
     console.log("Error during browser automation:", err);
     return false;
   } finally {
-    browser.close();
+    // Close the browser if it was initialized
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (err) {
+        console.log("Error closing browser:", err);
+      }
+    }
   }
 }
 
