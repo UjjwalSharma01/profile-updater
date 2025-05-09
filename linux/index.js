@@ -166,9 +166,12 @@ async function openBrowser(config) {
     
     if (!chromeRunningWithDebugging) {
       console.log("Starting Chrome with remote debugging enabled...");
-      exec(`${config.browserUrl} --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-profile about:blank &`);
-      // Wait a bit for Chrome to start
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Use the default user profile instead of a temporary profile
+      // This will include all your saved logins and cookies
+      exec(`${config.browserUrl} --remote-debugging-port=9222 about:blank &`);
+      // Increase wait time to ensure Chrome loads properly
+      console.log("Waiting for Chrome to start...");
+      await new Promise(resolve => setTimeout(resolve, 5000));
     }
     
     // Connect to the Chrome instance
@@ -202,13 +205,27 @@ async function openBrowser(config) {
       timeout: 0,
     });
     
-    await page.type("#usernameField", config.email);
-    await page.type("#passwordField", config.password);
-    const loginButton = await page.$(
-      ".waves-effect.waves-light.btn-large.btn-block.btn-bold.blue-btn.textTransform"
-    );
+    // Check if we're already logged in (look for attachCV element)
+    const isLoggedIn = await page.evaluate(() => {
+      return !!document.querySelector("#attachCV");
+    });
     
-    await Promise.all([page.waitForNavigation(), loginButton.click()]);
+    if (!isLoggedIn) {
+      console.log("Not logged in, attempting to log in with provided credentials");
+      await page.type("#usernameField", config.email);
+      await page.type("#passwordField", config.password);
+      const loginButton = await page.$(
+        ".waves-effect.waves-light.btn-large.btn-block.btn-bold.blue-btn.textTransform"
+      );
+      
+      // Wait longer for navigation to complete after login
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 60000 }), 
+        loginButton.click()
+      ]);
+    } else {
+      console.log("Already logged in, skipping login step");
+    }
     
     await page.goto(URL, {
       waitUntil: "networkidle0",
