@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import * as fsPromise from "fs/promises";
+import * as fs from "fs";
 import { fileURLToPath } from "url";
 import path from "path";
 import os from "os";
