@@ -148,11 +148,28 @@ function sendNotification(title, message) {
 }
 
 async function openBrowser(config) {
-  const browser = await puppeteer.launch({
-    executablePath: config.browserUrl,
-    headless: isProduction,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
+  // Try to connect to an existing Chrome instance first
+  let browser;
+  try {
+    // Connect to the running Chrome instance
+    browser = await puppeteer.connect({
+      browserURL: 'http://localhost:9222', // Chrome DevTools Protocol address
+      defaultViewport: null
+    });
+    console.log("Connected to existing Chrome instance");
+  } catch (err) {
+    console.log("No existing Chrome instance found, launching new browser");
+    // Fall back to launching a new browser instance
+    browser = await puppeteer.launch({
+      executablePath: config.browserUrl,
+      headless: isProduction,
+      args: [
+        '--no-sandbox', 
+        '--disable-setuid-sandbox',
+        '--remote-debugging-port=9222' // Enable remote debugging
+      ],
+    });
+  }
 
   try {
     const page = await browser.newPage();
