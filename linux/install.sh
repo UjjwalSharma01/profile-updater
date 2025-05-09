@@ -4,7 +4,7 @@
 echo "Installing Profile Updater for Linux..."
 
 # Create installation directory
-INSTALL_DIR="$HOME/.local/share/profile-updater"
+INSTALL_DIR="/home/user/.local/share/profile-updater"
 mkdir -p "$INSTALL_DIR"
 
 # First run copy-assets script to ensure we have all necessary files
@@ -33,11 +33,11 @@ EOF
 chmod +x "$INSTALL_DIR/profileUpdater"
 
 # Create executable link
-mkdir -p "$HOME/.local/bin"
-ln -sf "$INSTALL_DIR/profileUpdater" "$HOME/.local/bin/profileUpdater"
+mkdir -p "/home/user/.local/bin"
+ln -sf "$INSTALL_DIR/profileUpdater" "/home/user/.local/bin/profileUpdater"
 
 # Create desktop shortcut
-DESKTOP_FILE="$HOME/.local/share/applications/profile-updater.desktop"
+DESKTOP_FILE="/home/user/.local/share/applications/profile-updater.desktop"
 cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
 Name=Profile Updater
@@ -50,9 +50,9 @@ Categories=Utility;
 EOF
 
 # Check if PATH includes ~/.local/bin
-if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+if [[ ":$PATH:" != *":/home/user/.local/bin:"* ]]; then
     echo "Adding ~/.local/bin to your PATH in .bashrc"
-    echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+    echo 'export PATH="/home/user/.local/bin:$PATH"' >> "/home/user/.bashrc"
     echo "Please log out and back in, or run 'source ~/.bashrc' to update your PATH"
 fi
 
