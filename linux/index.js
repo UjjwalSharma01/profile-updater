@@ -148,17 +148,38 @@ function sendNotification(title, message) {
 }
 
 async function openBrowser(config) {
-  // Try to connect to an existing Chrome instance first
+  // First check if we need to start Chrome with debugging enabled
   let browser;
   try {
-    // Connect to the running Chrome instance
+    // Try to run Chrome with remote debugging enabled
+    const { exec } = await import('child_process');
+    // Check if Chrome is already running with remote debugging
+    let chromeRunningWithDebugging = false;
+    try {
+      const response = await fetch('http://localhost:9222/json/version');
+      if (response.ok) {
+        chromeRunningWithDebugging = true;
+      }
+    } catch (e) {
+      // Chrome not running with debugging, we'll start it
+    }
+    
+    if (!chromeRunningWithDebugging) {
+      console.log("Starting Chrome with remote debugging enabled...");
+      exec(`${config.browserUrl} --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-profile about:blank &`);
+      // Wait a bit for Chrome to start
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+    
+    // Connect to the Chrome instance
     browser = await puppeteer.connect({
-      browserURL: 'http://localhost:9222', // Chrome DevTools Protocol address
+      browserURL: 'http://localhost:9222',
       defaultViewport: null
     });
-    console.log("Connected to existing Chrome instance");
+    console.log("Connected to Chrome instance");
   } catch (err) {
-    console.log("No existing Chrome instance found, launching new browser");
+    console.log("Failed to connect to Chrome, launching new browser instance");
+    console.error(err);
     // Fall back to launching a new browser instance
     browser = await puppeteer.launch({
       executablePath: config.browserUrl,
@@ -166,7 +187,7 @@ async function openBrowser(config) {
       args: [
         '--no-sandbox', 
         '--disable-setuid-sandbox',
-        '--remote-debugging-port=9222' // Enable remote debugging
+        '--remote-debugging-port=9222'
       ],
     });
   }
